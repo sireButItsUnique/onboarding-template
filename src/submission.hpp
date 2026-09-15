@@ -78,6 +78,7 @@ void apply_stencil_row(const double* __restrict__ c, const double* __restrict__ 
                        double* __restrict__ dst, const size_t m, const __m256d& half, const __m256d& eighth) {
   
   size_t j = 1;
+  
   for (; j + 4 <= m - 1; j += 4) { // run 4 at a time for interior points only
     __m256d vcur = _mm256_loadu_pd(c + j);
     __m256d vup = _mm256_loadu_pd(up + j);
@@ -117,6 +118,7 @@ void apply_stencil(const Grid& old, Grid& res) {
   /*
     threading seems to just make it slower, bottleneck might be moving memory so the overhead of thread management is just bad
   */
+  #pragma omp parallel for schedule(static)
   for (size_t i = 1; i < n - 1; i++) {
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
     
