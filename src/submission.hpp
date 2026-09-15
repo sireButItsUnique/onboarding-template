@@ -74,6 +74,29 @@ public:
 // Apply the five-point stencil over all interior points, copying the boundary
 // values unchanged from old_grid to new_grid. Implement your solution here.
 __attribute__((target("avx2,fma")))
+void apply_stencil_row(const double* __restrict__ c, const double* __restrict__ up, const double* __restrict__ down,
+                       double* __restrict__ dst, const size_t m, const __m256d& half, const __m256d& eighth) {
+  
+  size_t j = 1;
+  for (; j + 4 <= m - 1; j += 4) { // run 4 at a time for interior points only
+    __m256d vcur = _mm256_loadu_pd(c + j);
+    __m256d vup = _mm256_loadu_pd(up + j);
+    __m256d vdown = _mm256_loadu_pd(down + j);
+    __m256d vleft = _mm256_loadu_pd(c + j - 1);
+    __m256d vright = _mm256_loadu_pd(c + j + 1);
+
+    __m256d neighbors = _mm256_add_pd(_mm256_add_pd(vup, vdown), _mm256_add_pd(vleft, vright));
+    __m256d res = _mm256_add_pd(_mm256_mul_pd(half, vcur), _mm256_mul_pd(eighth, neighbors));
+    _mm256_storeu_pd(dst + j, res);
+  }
+
+  // scalar for leftover
+  for (; j < m - 1; j++) {
+    dst[j] = 0.5 * c[j] + 0.125 * (up[j] + down[j] + c[j - 1] + c[j + 1]);
+  }
+}
+
+__attribute__((target("avx2,fma")))
 void apply_stencil(const Grid& old, Grid& res) {
   size_t n = old.get_rows();
   size_t m = old.get_cols();
@@ -84,29 +107,12 @@ void apply_stencil(const Grid& old, Grid& res) {
 
   const __m256d half = _mm256_set1_pd(0.5);
   const __m256d eighth = _mm256_set1_pd(0.125);
-
+  
+  /*
+    #pragma omp parallel for schedule(static) if(n > 512)
+    seems to just make it slower locally, bottleneck might be moving memory so the overhead of thread management is just bad
+  */
   for (size_t i = 1; i < n - 1; i++) {
-    const double* c = old.row_ptr(i);
-    const double* up = old.row_ptr(i - 1);
-    const double* down = old.row_ptr(i + 1);
-    double* dst = res.row_ptr(i);
-
-    size_t j = 1;
-    for (; j + 4 <= m - 1; j += 4) { // run 4 at a time for interior points only
-      __m256d vc = _mm256_loadu_pd(c + j);
-      __m256d vup = _mm256_loadu_pd(up + j);
-      __m256d vdown = _mm256_loadu_pd(down + j);
-      __m256d vleft = _mm256_loadu_pd(c + j - 1);
-      __m256d vright = _mm256_loadu_pd(c + j + 1);
-
-      __m256d neighbors = _mm256_add_pd(_mm256_add_pd(vup, vdown), _mm256_add_pd(vleft, vright));
-      __m256d r = _mm256_add_pd(_mm256_mul_pd(half, vc), _mm256_mul_pd(eighth, neighbors));
-      _mm256_storeu_pd(dst + j, r);
-    }
-
-    // scalar for leftover
-    for (; j < m - 1; j++) {
-      dst[j] = 0.5 * c[j] + 0.125 * (up[j] + down[j] + c[j - 1] + c[j + 1]);
-    }
+    apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
   }
 }
