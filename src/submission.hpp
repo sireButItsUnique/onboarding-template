@@ -101,7 +101,15 @@ void apply_stencil(const Grid& old, Grid& res) {
   size_t n = old.get_rows();
   size_t m = old.get_cols();
 
-  if (n < 3 || m < 3) return; // no interior points to update
+  // no interior points to update
+  if (n < 3 || m < 3) {
+    for (size_t i = 0; i < n; i++) {
+      for (size_t j = 0; j < m; j++) {
+        res(i, j) = old(i, j);
+      }
+    }
+    return;
+  } 
 
   const __m256d half = _mm256_set1_pd(0.5);
   const __m256d eighth = _mm256_set1_pd(0.125);
@@ -112,11 +120,11 @@ void apply_stencil(const Grid& old, Grid& res) {
   for (size_t i = 1; i < n - 1; i++) {
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
     
-    res.row_ptr(i)[0] = old.row_ptr(i)[0]; // copy boundary 
-    res.row_ptr(i)[m - 1] = old.row_ptr(i)[m - 1];
+    res(i, 0) = old(i, 0); // copy boundary 
+    res(i, m - 1) = old(i, m - 1);
   }
   for (size_t j = 0; j < m; j++) {
-    res.row_ptr(0)[j] = old.row_ptr(0)[j]; // copy boundary
-    res.row_ptr(n - 1)[j] = old.row_ptr(n - 1)[j];
+    res(0, j) = old(0, j); // copy boundary
+    res(n - 1, j) = old(n - 1, j);
   }
 }
