@@ -109,9 +109,10 @@ void apply_stencil(const Grid& old, Grid& res) {
   const __m256d eighth = _mm256_set1_pd(0.125);
   
   /*
-    #pragma omp parallel for schedule(static) if(n > 512)
+    
     seems to just make it slower locally, bottleneck might be moving memory so the overhead of thread management is just bad
   */
+  #pragma omp parallel for schedule(static) num_threads(4) if(n > 128)
   for (size_t i = 1; i < n - 1; i++) {
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
   }
