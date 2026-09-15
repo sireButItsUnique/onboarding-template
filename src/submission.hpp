@@ -101,18 +101,22 @@ void apply_stencil(const Grid& old, Grid& res) {
   size_t n = old.get_rows();
   size_t m = old.get_cols();
 
-  res = old;
-
   if (n < 3 || m < 3) return; // no interior points to update
 
   const __m256d half = _mm256_set1_pd(0.5);
   const __m256d eighth = _mm256_set1_pd(0.125);
   
   /*
-    seems to just make it slower locally, bottleneck might be moving memory so the overhead of thread management is just bad
+    threading seems to just make it slower, bottleneck might be moving memory so the overhead of thread management is just bad
   */
-  #pragma omp parallel for
   for (size_t i = 1; i < n - 1; i++) {
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
+    
+    res.row_ptr(i)[0] = old.row_ptr(i)[0]; // copy boundary 
+    res.row_ptr(i)[m - 1] = old.row_ptr(i)[m - 1];
+  }
+  for (size_t j = 0; j < m; j++) {
+    res.row_ptr(0)[j] = old.row_ptr(0)[j]; // copy boundary
+    res.row_ptr(n - 1)[j] = old.row_ptr(n - 1)[j];
   }
 }
