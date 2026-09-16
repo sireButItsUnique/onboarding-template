@@ -127,16 +127,13 @@ void apply_stencil(const Grid& old, Grid& res) {
   #pragma omp parallel for schedule(static) // static since workload is uniform
   for (size_t i = 1; i < n - 1; i++) {      // found better to not specify num of threads, let omp decide
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m);
+
+    res(i, 0) = old(i, 0);  // move back to already threaded loop, less threads
+    res(i, m - 1) = old(i, m - 1);
   }
 
   // copy boundary values only if first time, since in harness they're just swapped around anyway
   if (!res.get_boundary_formed()) {
-
-    #pragma omp parallel for schedule(static)
-    for (size_t i = 1; i < n - 1; i++) {
-      res(i, 0) = old(i, 0); 
-      res(i, m - 1) = old(i, m - 1);
-    }
 
     #pragma omp parallel for schedule(static) // copying can also be parallelized
     for (size_t j = 0; j < m; j++) {
