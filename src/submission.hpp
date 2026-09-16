@@ -17,12 +17,15 @@ private:
   size_t cols_;
   size_t size_;
 
+  bool boundary_formed_; // keep track of whether boundary has already been copied
+
   double* data_;
 
 public:
   Grid(size_t rows, size_t cols) {
     rows_ = rows;
     cols_ = cols;
+    boundary_formed_ = false;
 
     size_ = rows * cols * sizeof(double);
     data_ = (double*)malloc(size_);
@@ -50,6 +53,14 @@ public:
 
   size_t get_cols() const {
     return cols_;
+  }
+
+  bool get_boundary_formed() const {
+    return boundary_formed_;
+  }
+
+  void form_boundary() {
+    boundary_formed_ = true;
   }
   
   double* row_ptr(size_t i) {
@@ -116,16 +127,23 @@ void apply_stencil(const Grid& old, Grid& res) {
   #pragma omp parallel for schedule(static) // static since workload is uniform
   for (size_t i = 1; i < n - 1; i++) {      // found better to not specify num of threads, let omp decide
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m);
-    
-    // copying boundary 
-    res(i, 0) = old(i, 0); 
-    res(i, m - 1) = old(i, m - 1);
   }
 
-  // copying boundary
-  #pragma omp parallel for schedule(static) // copying can also be parallelized
-  for (size_t j = 0; j < m; j++) {
-    res(0, j) = old(0, j); 
-    res(n - 1, j) = old(n - 1, j);
+  // copy boundary values only if first time, since in harness they're just swapped around anyway
+  if (!res.get_boundary_formed()) {
+
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 1; i < n - 1; i++) {
+      res(i, 0) = old(i, 0); 
+      res(i, m - 1) = old(i, m - 1);
+    }
+
+    #pragma omp parallel for schedule(static) // copying can also be parallelized
+    for (size_t j = 0; j < m; j++) {
+      res(0, j) = old(0, j); 
+      res(n - 1, j) = old(n - 1, j);
+    }
+
+    res.form_boundary();
   }
 }
