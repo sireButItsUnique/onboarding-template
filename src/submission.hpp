@@ -120,11 +120,13 @@ void apply_stencil(const Grid& old, Grid& res) {
 
   // no interior points to update
   if (n < 3 || m < 3) {
+    if (res.get_boundary_formed()) return;
     for (size_t i = 0; i < n; i++) {
       for (size_t j = 0; j < m; j++) {
         res(i, j) = old(i, j);
       }
     }
+    res.form_boundary();
     return;
   } 
   
