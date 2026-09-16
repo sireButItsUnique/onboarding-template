@@ -115,18 +115,19 @@ void apply_stencil(const Grid& old, Grid& res) {
   const __m256d half = _mm256_set1_pd(0.5);
   const __m256d eighth = _mm256_set1_pd(0.125);
   
-  /*
-    threading seems to just make it slower, bottleneck might be moving memory so the overhead of thread management is just bad
-  */
-  #pragma omp parallel for schedule(static)
+  #pragma omp parallel for schedule(static) // static since workload is uniform
   for (size_t i = 1; i < n - 1; i++) {
     apply_stencil_row(old.row_ptr(i), old.row_ptr(i - 1), old.row_ptr(i + 1), res.row_ptr(i), m, half, eighth);
     
-    res(i, 0) = old(i, 0); // copy boundary 
+    // copying boundary 
+    res(i, 0) = old(i, 0); 
     res(i, m - 1) = old(i, m - 1);
   }
+
+  // copying boundary
+  #pragma omp parallel for schedule(static) // copying can also be parallelized
   for (size_t j = 0; j < m; j++) {
-    res(0, j) = old(0, j); // copy boundary
+    res(0, j) = old(0, j); 
     res(n - 1, j) = old(n - 1, j);
   }
 }
