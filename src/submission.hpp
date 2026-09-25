@@ -56,7 +56,13 @@ public:
     size_ = rows * stride_ * sizeof(double); // multiple of ALIGNMENT_SIZE, as aligned_alloc requires
 
     data_ = static_cast<double*>(aligned_alloc(ALIGNMENT_SIZE, size_));
-    memset(data_, 0, size_);
+
+    // first touch: zero rows with the same static split apply_stencil uses, so on a numa machine each row's
+    // pages land on the node of the thread that later updates it (off by a row or two at chunk edges, close enough)
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < rows; i++) {
+      memset(data_ + i * stride_, 0, stride_ * sizeof(double));
+    }
 
     boundary_formed_ = false;
   }
