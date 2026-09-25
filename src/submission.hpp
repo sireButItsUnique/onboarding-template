@@ -129,7 +129,7 @@ static void apply_stencil_row_scalar(const double* __restrict__ c, const double*
 }
 
 #if defined(__x86_64__) || defined(__i386__)
-__attribute__((target("avx2")))
+__attribute__((target("avx2,fma")))
 static void apply_stencil_row_avx2(const double* __restrict__ c, const double* __restrict__ up, const double* __restrict__ down,
                             double* __restrict__ dst, const size_t m) {
   const __m256d half = _mm256_set1_pd(0.5);
@@ -149,8 +149,9 @@ static void apply_stencil_row_avx2(const double* __restrict__ c, const double* _
     __m256d vleft = _mm256_loadu_pd(c + j - 1);
     __m256d vright = _mm256_loadu_pd(c + j + 1);
 
-    __m256d neighbors = _mm256_add_pd(_mm256_add_pd(vup, vdown), _mm256_add_pd(vleft, vright));
-    __m256d res = _mm256_add_pd(_mm256_mul_pd(half, vcur), _mm256_mul_pd(eighth, neighbors));
+    // two fmas replace the final add, one fewer instruction than summing all four neighbors first
+    __m256d res = _mm256_fmadd_pd(eighth, _mm256_add_pd(vleft, vright), _mm256_mul_pd(half, vcur));
+    res = _mm256_fmadd_pd(eighth, _mm256_add_pd(vup, vdown), res);
     _mm256_store_pd(dst + j, res);
   }
 
@@ -161,12 +162,12 @@ static void apply_stencil_row_avx2(const double* __restrict__ c, const double* _
 }
 #endif
 
-// running avx2 instructions on a cpu without them crashes, so check once and fall back
+// running avx2/fma instructions on a cpu without them crashes, so check once and fall back
 static stencil_row_fn select_stencil_row() {
-#if defined(__AVX2__)
-  return apply_stencil_row_avx2; // already compiled for avx2 (e.g. -march=x86-64-v3), no need to check
+#if defined(__AVX2__) && defined(__FMA__)
+  return apply_stencil_row_avx2; // already compiled for avx2 + fma (e.g. -march=x86-64-v3), no need to check
 #elif defined(__x86_64__) || defined(__i386__)
-  static const stencil_row_fn fn = __builtin_cpu_supports("avx2") ? apply_stencil_row_avx2 : apply_stencil_row_scalar;
+  static const stencil_row_fn fn = __builtin_cpu_supports("avx2") && __builtin_cpu_supports("fma") ? apply_stencil_row_avx2 : apply_stencil_row_scalar;
   return fn;
 #else
   return apply_stencil_row_scalar;
