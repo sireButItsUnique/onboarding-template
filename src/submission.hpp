@@ -123,6 +123,7 @@ typedef void (*stencil_row_fn)(const double* __restrict__, const double* __restr
 // fallback for cpus without avx2, compiler should still vectorize this with wtv the target has
 static void apply_stencil_row_scalar(const double* __restrict__ c, const double* __restrict__ up, const double* __restrict__ down,
                               double* __restrict__ dst, const size_t m) {
+  #pragma omp parallel for schedule(static) // let omp optimize this
   for (size_t j = 1; j < m - 1; j++) {
     dst[j] = 0.5 * c[j] + 0.125 * (up[j] + down[j] + c[j - 1] + c[j + 1]);
   }
